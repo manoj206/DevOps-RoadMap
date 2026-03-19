@@ -336,6 +336,206 @@ mkdir {2022,2023,2024}-{01..12}  # Creates 36 directories: 2022-01, 2022-02, ...
 
 ### Globbing Inside Scripts — the `nullglob` Problem
 
+
+## Understanding `nullglob` in Bash
+
+When working with wildcards like `*.log` in shell scripts, Bash has a subtle behavior that can cause unexpected bugs. The `nullglob` option changes this behavior to make scripts safer.
+
+---
+
+## The Example
+
+```bash
+# Iterate over files (always use nullglob for safety)
+shopt -s nullglob
+
+for LOG in /var/log/myapp/*.log; do
+    echo "Processing: $LOG"
+    gzip "$LOG"
+done
+
+shopt -u nullglob
+```
+
+---
+
+## What’s Actually Happening
+
+The pattern:
+
+```bash
+/var/log/myapp/*.log
+```
+
+is expanded by the shell **before** the loop runs.
+
+---
+
+## Default Behavior (without `nullglob`)
+
+### When files exist
+
+If the directory contains:
+
+```bash
+app.log
+server.log
+```
+
+The shell expands to:
+
+```bash
+/var/log/myapp/app.log /var/log/myapp/server.log
+```
+
+The loop runs normally.
+
+---
+
+### When no files exist ❌
+
+If there are **no `.log` files**, the shell does this:
+
+```bash
+/var/log/myapp/*.log   →   "/var/log/myapp/*.log"
+```
+
+Yes — it keeps the pattern **as-is**.
+
+So your loop becomes:
+
+```bash
+for LOG in /var/log/myapp/*.log
+```
+
+Which runs **once**, with:
+
+```bash
+LOG="/var/log/myapp/*.log"
+```
+
+Then your script tries:
+
+```bash
+gzip /var/log/myapp/*.log
+```
+
+Result:
+
+```bash
+gzip: /var/log/myapp/*.log: No such file or directory
+```
+
+---
+
+## With `nullglob` Enabled ✅
+
+```bash
+shopt -s nullglob
+```
+
+This tells Bash:
+
+> If a wildcard matches nothing, return **nothing** instead of the pattern.
+
+---
+
+### When no files exist
+
+```bash
+/var/log/myapp/*.log   →   (empty)
+```
+
+Now the loop becomes:
+
+```bash
+for LOG in
+```
+
+Which means:
+
+* The loop runs **zero times**
+* No errors
+* Clean behavior
+
+---
+
+## Why This Matters
+
+Without `nullglob`, your script can:
+
+* Process fake filenames
+* Throw misleading errors
+* Behave unpredictably in empty directories
+
+With `nullglob`, your script:
+
+* Only runs when real files exist
+* Avoids edge-case bugs
+* Becomes safer and more predictable
+
+---
+
+## Mental Model
+
+Think of wildcard expansion like a fishing net:
+
+| Scenario        | Default Behavior   | With `nullglob` |
+| --------------- | ------------------ | --------------- |
+| Matches files   | Return files       | Return files    |
+| Matches nothing | Return the pattern | Return nothing  |
+
+---
+
+## Why Turn It Off?
+
+```bash
+shopt -u nullglob
+```
+
+Shell options are **global to the current session**.
+Good practice is to reset them after use to avoid side effects in other parts of your script.
+
+---
+
+## Quick Demo
+
+```bash
+echo *.log
+```
+
+### Without `nullglob`
+
+```bash
+*.log
+```
+
+### With `nullglob`
+
+```bash
+# (no output)
+```
+
+---
+
+## Bonus Tip
+
+There’s a stricter alternative:
+
+```bash
+shopt -s failglob
+```
+
+This will:
+
+* Throw an error if a wildcard matches nothing
+* Prevent silent failures
+
+Useful when you want **fail-fast behavior** instead of silent skipping.
+
+---
+
+
 ```bash
 # Default behaviour — if no files match, the glob is passed literally:
 for f in *.txt; do
@@ -349,8 +549,11 @@ for f in *.txt; do
 done
 shopt -u nullglob       # Turn off after use to avoid unexpected behaviour elsewhere
 ```
+## Takeaway
 
+If your script depends on wildcard expansion, enabling `nullglob` is a small change that prevents subtle and frustrating bugs.
 > ⚠️ Always use `shopt -s nullglob` before glob-based loops in scripts. Without it, the loop will process the literal string `*.txt` if no files match — silently corrupting your logic.
+
 
 ---
 

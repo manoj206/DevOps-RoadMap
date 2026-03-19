@@ -527,7 +527,7 @@ crontab -u alice -l          # List another user's crontab (requires root)
 
 **3. Use `flock` to prevent overlapping runs for long jobs:**
 ```bash
-# Without flock: if backup takes 3 hours, the 2 AM job and next day's 2 AM job overlap
+# Without flock: jobs can overlap if runtime exceeds the schedule interval (24 hours for this cron)
 30 2 * * * /usr/bin/env bash /home/alice/scripts/backup.sh >> /var/log/backup.log 2>&1
 
 # With flock: second instance exits immediately if first is still running
